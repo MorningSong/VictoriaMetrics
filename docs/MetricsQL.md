@@ -1,5 +1,4 @@
 ---
-sort: 23
 weight: 23
 title: MetricsQL
 menu:
@@ -10,9 +9,6 @@ aliases:
 - /ExtendedPromQL.html
 - /MetricsQL.html
 ---
-
-# MetricsQL
-
 [VictoriaMetrics](https://github.com/VictoriaMetrics/VictoriaMetrics) implements MetricsQL -
 query language inspired by [PromQL](https://prometheus.io/docs/prometheus/latest/querying/basics/).
 MetricsQL is backwards-compatible with PromQL, so Grafana dashboards backed by Prometheus datasource should work

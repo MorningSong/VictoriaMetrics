@@ -1,16 +1,17 @@
 ---
 weight: 9
-title: VictoriaLogs datasource for Grafana
+title: Grafana datasource
 editLink: https://github.com/VictoriaMetrics/victorialogs-datasource/blob/main/README.md
 menu:
   docs:
+    identifier: victorialogs-grafana-datasource
     parent: victorialogs
     weight: 9
 aliases:
 - /victorialogs/victorialogs-datasource.html
 ---
 
-# VictoriaLogs datasource for Grafana
+
 
 
 The VictoriaLogs datasource plugin allows you to query and visualize
@@ -19,6 +20,7 @@ The VictoriaLogs datasource plugin allows you to query and visualize
 * [Installation](#installation)
 * [How to make new release](#how-to-make-new-release)
 * [Notes](#notes)
+* [Frequently Asked Questions](#faq)
 * [License](#license)
 
 ## Installation
@@ -94,7 +96,7 @@ docker-compose -f docker-compose.yaml up
 
 After Grafana starts successfully, datasource should be available in the datasources tab
 
-<img src="/victorialogsprovision_datasources.png" width="800" alt="Configuration">
+<img src="provision_datasources.png" width="800" alt="Configuration">
 
 ### Install in Kubernetes
 
@@ -307,7 +309,13 @@ In the `plugin.json` file of our plugin, the `metrics` field is set to `true`. T
 
 For more information on the fields in `plugin.json`, please refer to the [Grafana documentation](https://grafana.com/developers/plugin-tools/reference-plugin-json#properties).
 
+## FAQ
+
+### Which version of Grafana is required in order to use VictoriaLogs datasource?
+
+[10.0.3](https://grafana.com/grafana/download/10.0.3) or newer.
+
 ## License
 
 This project is licensed under
-the [AGPL-3.0-only](https://github.com/VictoriaMetrics/victorialogs-datasource/blob/main/LICENSE).
+the [Apache 2.0 license](https://github.com/VictoriaMetrics/victorialogs-datasource/blob/main/LICENSE).

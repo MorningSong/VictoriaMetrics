@@ -1,5 +1,4 @@
 ---
-sort: 36
 weight: 36
 title: Prometheus service discovery
 menu:
@@ -9,9 +8,6 @@ menu:
 aliases:
 - /sd_configs.html
 ---
-
-# Prometheus service discovery
-
 # Supported service discovery configs
 
 [vmagent](https://docs.victoriametrics.com/vmagent/) and [single-node VictoriaMetrics](https://docs.victoriametrics.com/#how-to-scrape-prometheus-exporters-such-as-node-exporter)
@@ -194,7 +190,7 @@ scrape_configs:
     # filter: "..."
 
     # allow_stale is an optional config, which allows stale Consul results.
-    # See https://www.consul.io/api/features/consistency.html
+    # See https://developer.hashicorp.com/consul/api-docs/features/consistency
     # Reduce load on Consul if set to true. By default, it is set to true.
     #
     # allow_stale: ...
@@ -1304,7 +1300,7 @@ scrape_configs:
     # tag_separator: "..."
 
     # allow_stale is an optional config, which allows stale Nomad results.
-    # See https://developer.hashicorp.com/nomad/api-docs#consistency-modes
+    # See https://developer.hashicorp.com/consul/api-docs/features/consistency
     # Reduces load on Nomad if set to true. By default, it is set to true.
     #
     # allow_stale: ...
@@ -1554,7 +1550,7 @@ The following meta labels are available on discovered targets during [relabeling
 
 * `__meta_vultr_instance_allowed_bandwidth_gb`: monthly bandwidth quota in GB.
 * `__meta_vultr_instance_disk_gb`: the size of the disk in GB.
-* `__meta_vultr_instance_features`: comma-separated list of features avabilable to instance, such as "auto_backups", "ipv6", "ddos_protection".
+* `__meta_vultr_instance_features`: comma-separated list of features available to instance, such as "auto_backups", "ipv6", "ddos_protection".
 * `__meta_vultr_instance_hostname`: hostname for this instance.
 * `__meta_vultr_instance_id`: unique ID for the VPS Instance.
 * `__meta_vultr_instance_internal_ip`: internal IP used by this instance, if set. Only relevant when a VPC is attached.
@@ -1693,7 +1689,7 @@ scrape_configs:
   # scrape_timeout: <duration>
 
   # max_scrape_size is an optional parameter for limiting the response size in bytes from scraped targets.
-  # By default, uses limit from -promscrape.maxScrapeSize command-line flag.
+  # If max_scrape_size isn't set, then the limit from -promscrape.maxScrapeSize command-line flag is used instead.
   # Example values:
   # - "10MiB" - 10 * 1024 * 1024 bytes
   # - "100MB" - 100 * 1000 * 1000 bytes
@@ -1771,6 +1767,9 @@ scrape_configs:
   # If more than this number of samples are present after metric relabeling
   # the entire scrape will be treated as failed.
   # By default, the limit is disabled.
+  # The sample_limit can be set on a per-target basis by specifying `__sample_limit__`
+  # label during target relabeling phase.
+  # See https://docs.victoriametrics.com/vmagent/#relabeling
   #
   # sample_limit: <int>
 

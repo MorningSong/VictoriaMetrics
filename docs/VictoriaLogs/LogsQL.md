@@ -1,5 +1,4 @@
 ---
-sort: 5
 weight: 5
 title: LogsQL
 menu:
@@ -9,9 +8,6 @@ menu:
 aliases:
 - /VictoriaLogs/LogsQL.html
 ---
-
-# LogsQL
-
 LogsQL is a simple yet powerful query language for [VictoriaLogs](https://docs.victoriametrics.com/victorialogs/).
 See [examples](https://docs.victoriametrics.com/victorialogs/logsql-examples/) and [tutorial](#logsql-tutorial)
 in order to feel the language.

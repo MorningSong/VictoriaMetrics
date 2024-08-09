@@ -78,7 +78,7 @@ var (
 		"then each cluster must have unique name in order to properly de-duplicate samples received from these clusters. "+
 		"See https://docs.victoriametrics.com/vmagent/#scraping-big-number-of-targets for more info")
 	maxScrapeSize = flagutil.NewBytes("promscrape.maxScrapeSize", 16*1024*1024, "The maximum size of scrape response in bytes to process from Prometheus targets. "+
-		"Bigger responses are rejected")
+		"Bigger responses are rejected. See also max_scrape_size option at https://docs.victoriametrics.com/sd_configs/#scrape_configs")
 )
 
 var clusterMemberID int
@@ -852,12 +852,14 @@ func getScrapeWorkConfig(sc *ScrapeConfig, baseDir string, globalCfg *GlobalConf
 		// See https://github.com/VictoriaMetrics/VictoriaMetrics/issues/1281#issuecomment-840538907
 		scrapeTimeout = scrapeInterval
 	}
-	var err error
 	mss := maxScrapeSize.N
-	if len(sc.MaxScrapeSize) > 0 {
-		mss, err = flagutil.ParseBytes(sc.MaxScrapeSize)
+	if sc.MaxScrapeSize != "" {
+		n, err := flagutil.ParseBytes(sc.MaxScrapeSize)
 		if err != nil {
-			return nil, fmt.Errorf("unexpected `max_scrape_size` value %q for `job_name` %q`: %w", sc.MaxScrapeSize, jobName, err)
+			return nil, fmt.Errorf("cannot parse `max_scrape_size` value %q for `job_name` %q`: %w", sc.MaxScrapeSize, jobName, err)
+		}
+		if n > 0 {
+			mss = n
 		}
 	}
 	honorLabels := sc.HonorLabels
@@ -1185,6 +1187,16 @@ func (swc *scrapeWorkConfig) getScrapeWork(target string, extraLabels, metaLabel
 		}
 		seriesLimit = n
 	}
+	// Read sample_limit option from __sample_limit__ label.
+	// See https://docs.victoriametrics.com/vmagent/#automatically-generated-metrics
+	sampleLimit := swc.sampleLimit
+	if s := labels.Get("__sample_limit__"); len(s) > 0 {
+		n, err := strconv.Atoi(s)
+		if err != nil {
+			return nil, fmt.Errorf("cannot parse __sample_limit__=%q: %w", s, err)
+		}
+		sampleLimit = n
+	}
 	// Read stream_parse option from __stream_parse__ label.
 	// See https://docs.victoriametrics.com/vmagent/#stream-parsing-mode
 	streamParse := swc.streamParse
@@ -1230,7 +1242,7 @@ func (swc *scrapeWorkConfig) getScrapeWork(target string, extraLabels, metaLabel
 		AuthConfig:           swc.authConfig,
 		RelabelConfigs:       swc.relabelConfigs,
 		MetricRelabelConfigs: swc.metricRelabelConfigs,
-		SampleLimit:          swc.sampleLimit,
+		SampleLimit:          sampleLimit,
 		DisableCompression:   swc.disableCompression,
 		DisableKeepAlive:     swc.disableKeepAlive,
 		StreamParse:          streamParse,

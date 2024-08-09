@@ -66,9 +66,8 @@ func (as *histogramBucketAggrState) pushSamples(samples []pushSample) {
 	}
 }
 
-func (as *histogramBucketAggrState) removeOldEntries(ctx *flushCtx, currentTime uint64) {
+func (as *histogramBucketAggrState) removeOldEntries(currentTime uint64) {
 	m := &as.m
-	var staleOutputSamples int
 	m.Range(func(k, v any) bool {
 		sv := v.(*histogramBucketStateValue)
 
@@ -77,7 +76,6 @@ func (as *histogramBucketAggrState) removeOldEntries(ctx *flushCtx, currentTime 
 		if deleted {
 			// Mark the current entry as deleted
 			sv.deleted = deleted
-			staleOutputSamples++
 		}
 		sv.mu.Unlock()
 
@@ -86,14 +84,12 @@ func (as *histogramBucketAggrState) removeOldEntries(ctx *flushCtx, currentTime 
 		}
 		return true
 	})
-	ctx.a.staleOutputSamples["histogram_bucket"].Add(staleOutputSamples)
 }
 
-func (as *histogramBucketAggrState) flushState(ctx *flushCtx, _ bool) {
+func (as *histogramBucketAggrState) flushState(ctx *flushCtx) {
 	currentTime := fasttime.UnixTimestamp()
-	currentTimeMsec := int64(currentTime) * 1000
 
-	as.removeOldEntries(ctx, currentTime)
+	as.removeOldEntries(currentTime)
 
 	m := &as.m
 	m.Range(func(k, v any) bool {
@@ -102,7 +98,7 @@ func (as *histogramBucketAggrState) flushState(ctx *flushCtx, _ bool) {
 		if !sv.deleted {
 			key := k.(string)
 			sv.h.VisitNonZeroBuckets(func(vmrange string, count uint64) {
-				ctx.appendSeriesWithExtraLabel(key, "histogram_bucket", currentTimeMsec, float64(count), "vmrange", vmrange)
+				ctx.appendSeriesWithExtraLabel(key, "histogram_bucket", float64(count), "vmrange", vmrange)
 			})
 		}
 		sv.mu.Unlock()

@@ -42,6 +42,7 @@ import (
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/protoparser/common"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/protoparser/opentelemetry/firehose"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/storage"
+	"github.com/VictoriaMetrics/VictoriaMetrics/lib/stringsutil"
 )
 
 var (
@@ -64,10 +65,10 @@ var (
 		"See also -opentsdbHTTPListenAddr.useProxyProtocol")
 	opentsdbHTTPUseProxyProtocol = flag.Bool("opentsdbHTTPListenAddr.useProxyProtocol", false, "Whether to use proxy protocol for connections accepted "+
 		"at -opentsdbHTTPListenAddr . See https://www.haproxy.org/download/1.8/doc/proxy-protocol.txt")
-	configAuthKey          = flagutil.NewPassword("configAuthKey", "Authorization key for accessing /config page. It must be passed via authKey query arg. It overrides httpAuth.* settings.")
+	configAuthKey          = flagutil.NewPassword("configAuthKey", "Authorization key for accessing /config page. It must be passed via authKey query arg. It overrides -httpAuth.*")
 	reloadAuthKey          = flagutil.NewPassword("reloadAuthKey", "Auth key for /-/reload http endpoint. It must be passed via authKey query arg. It overrides httpAuth.* settings.")
 	maxLabelsPerTimeseries = flag.Int("maxLabelsPerTimeseries", 30, "The maximum number of labels accepted per time series. Superfluous labels are dropped. In this case the vm_metrics_with_dropped_labels_total metric at /metrics page is incremented")
-	maxLabelValueLen       = flag.Int("maxLabelValueLen", 1024, "The maximum length of label values in the accepted time series. Longer label values are truncated. In this case the vm_too_long_label_values_total metric at /metrics page is incremented")
+	maxLabelValueLen       = flag.Int("maxLabelValueLen", 4*1024, "The maximum length of label values in the accepted time series. Longer label values are truncated. In this case the vm_too_long_label_values_total metric at /metrics page is incremented")
 )
 
 var (
@@ -217,6 +218,10 @@ func RequestHandler(w http.ResponseWriter, r *http.Request) bool {
 		addInfluxResponseHeaders(w)
 		influxutils.WriteDatabaseNames(w)
 		return true
+	case "/influx/health":
+		influxHealthRequests.Inc()
+		influxutils.WriteHealthCheckResponse(w)
+		return true
 	case "/opentelemetry/api/v1/push", "/opentelemetry/v1/metrics":
 		opentelemetryPushRequests.Inc()
 		if err := opentelemetry.InsertHandler(r); err != nil {
@@ -327,7 +332,7 @@ func RequestHandler(w http.ResponseWriter, r *http.Request) bool {
 		}
 		return true
 	case "/prometheus/config", "/config":
-		if !httpserver.CheckAuthFlag(w, r, configAuthKey.Get(), "configAuthKey") {
+		if !httpserver.CheckAuthFlag(w, r, configAuthKey) {
 			return true
 		}
 		promscrapeConfigRequests.Inc()
@@ -336,17 +341,17 @@ func RequestHandler(w http.ResponseWriter, r *http.Request) bool {
 		return true
 	case "/prometheus/api/v1/status/config", "/api/v1/status/config":
 		// See https://prometheus.io/docs/prometheus/latest/querying/api/#config
-		if !httpserver.CheckAuthFlag(w, r, configAuthKey.Get(), "configAuthKey") {
+		if !httpserver.CheckAuthFlag(w, r, configAuthKey) {
 			return true
 		}
 		promscrapeStatusConfigRequests.Inc()
 		w.Header().Set("Content-Type", "application/json")
 		var bb bytesutil.ByteBuffer
 		promscrape.WriteConfigData(&bb)
-		fmt.Fprintf(w, `{"status":"success","data":{"yaml":%q}}`, bb.B)
+		fmt.Fprintf(w, `{"status":"success","data":{"yaml":%s}}`, stringsutil.JSONString(string(bb.B)))
 		return true
 	case "/prometheus/-/reload", "/-/reload":
-		if !httpserver.CheckAuthFlag(w, r, reloadAuthKey.Get(), "reloadAuthKey") {
+		if !httpserver.CheckAuthFlag(w, r, reloadAuthKey) {
 			return true
 		}
 		promscrapeConfigReloadRequests.Inc()
@@ -396,7 +401,8 @@ var (
 	influxWriteRequests = metrics.NewCounter(`vm_http_requests_total{path="/influx/write", protocol="influx"}`)
 	influxWriteErrors   = metrics.NewCounter(`vm_http_request_errors_total{path="/influx/write", protocol="influx"}`)
 
-	influxQueryRequests = metrics.NewCounter(`vm_http_requests_total{path="/influx/query", protocol="influx"}`)
+	influxQueryRequests  = metrics.NewCounter(`vm_http_requests_total{path="/influx/query", protocol="influx"}`)
+	influxHealthRequests = metrics.NewCounter(`vm_http_requests_total{path="/influx/health", protocol="influx"}`)
 
 	datadogv1WriteRequests = metrics.NewCounter(`vm_http_requests_total{path="/datadog/api/v1/series", protocol="datadog"}`)
 	datadogv1WriteErrors   = metrics.NewCounter(`vm_http_request_errors_total{path="/datadog/api/v1/series", protocol="datadog"}`)
