@@ -271,6 +271,7 @@ The list of LogsQL filters:
 - [IPv4 range filter](#ipv4-range-filter) - matches logs with ip address [field values](https://docs.victoriametrics.com/victorialogs/keyconcepts/#data-model) in the given range
 - [String range filter](#string-range-filter) - matches logs with [field values](https://docs.victoriametrics.com/victorialogs/keyconcepts/#data-model) in the given string range
 - [Length range filter](#length-range-filter) - matches logs with [field values](https://docs.victoriametrics.com/victorialogs/keyconcepts/#data-model) of the given length range
+- [Value type filter](#value_type-filter) - matches logs with [fields](https://docs.victoriametrics.com/victorialogs/keyconcepts/#data-model) stored under the given value type
 - [Logical filter](#logical-filter) - allows combining other filters
 
 
@@ -1224,9 +1225,27 @@ See also:
 - [Logical filter](#logical-filter)
 
 
+### value_type filter
+
+VictoriaLogs automatically detects types for the ingested [log fields](https://docs.victoriametrics.com/victorialogs/keyconcepts/#data-model) and stores log field values
+according to the detected type (such as `const`, `dict`, `string`, `int64`, `float64`, etc.). Value types for stored fields can be obtained via [`block_stats` pipe](#block_stats-pipe).
+
+Sometimes it is needed to select logs with fields of a particular value type. Then `value_type(type)` filter can be used.
+For example, the following filter selects logs where `user_id` field values are stored as `uint64` type:
+
+```logsql
+user_id:value_type(uint64)
+```
+
+See also:
+
+- [`block_stats` pipe](#block_stats-pipe)
+- [Logical filter](#logical-filter)
+
+
 ### Logical filter
 
-Simpler LogsQL [filters](#filters) can be combined into more complex filters with the following logical operations:
+Basic LogsQL [filters](#filters) can be combined into more complex filters with the following logical operations:
 
 - `q1 AND q2` - matches common log entries returned by both `q1` and `q2`. Arbitrary number of [filters](#filters) can be combined with `AND` operation.
   For example, `error AND file AND app` matches [log messages](https://docs.victoriametrics.com/victorialogs/keyconcepts/#message-field),
@@ -1325,6 +1344,7 @@ LogsQL supports the following pipes:
 - [`stream_context`](#stream_context-pipe) allows selecting surrounding logs in front and after the matching logs
   per each [log stream](https://docs.victoriametrics.com/victorialogs/keyconcepts/#stream-fields).
 - [`top`](#top-pipe) returns top `N` field sets with the maximum number of matching logs.
+- [`union`](#union-pipe) returns results from multiple LogsQL queries.
 - [`uniq`](#uniq-pipe) returns unique log entires.
 - [`unpack_json`](#unpack_json-pipe) unpacks JSON messages from [log fields](https://docs.victoriametrics.com/victorialogs/keyconcepts/#data-model).
 - [`unpack_logfmt`](#unpack_logfmt-pipe) unpacks [logfmt](https://brandur.org/logfmt) messages from [log fields](https://docs.victoriametrics.com/victorialogs/keyconcepts/#data-model).
@@ -1347,6 +1367,7 @@ The returned per-block stats:
 
 See also:
 
+- [`value_type` filter](#value_type-filter)
 - [`blocks_count` pipe](#blocks_count-pipe)
 - [`len` pipe](#len-pipe)
 
@@ -1868,20 +1889,45 @@ then `as _msg` part can be omitted. The following query is equivalent to the pre
 _time:5m | format "request from <ip>:<port>"
 ```
 
-If some field values must be put into double quotes before formatting, then add `q:` in front of the corresponding field name.
-For example, the following command generates properly encoded JSON object from `_msg` and `stacktrace` [log fields](https://docs.victoriametrics.com/victorialogs/keyconcepts/#data-model)
-and stores it into `my_json` output field:
+String fields can be formatted with the following additional formatting rules:
 
-```logsql
-_time:5m | format '{"_msg":<q:_msg>,"stacktrace":<q:stacktrace>}' as my_json
-```
+- JSON-compatible quoted string - add `q:` in front of the corresponding field name.
+  For example, the following query generates properly encoded JSON object from `_msg` and `stacktrace`
+  [log fields](https://docs.victoriametrics.com/victorialogs/keyconcepts/#data-model) and stores it into `my_json` output field:
 
-If some fields must be transformed to uppercase or to lowercase, then add `uc:` or `lc:` in front of the corresponding field name.
-For example, the following command stores uppercase value of `foo` field and lowercase value of `bar` field in the `result` field:
+  ```logsql
+  _time:5m | format '{"_msg":<q:_msg>,"stacktrace":<q:stacktrace>}' as my_json
+  ```
 
-```logsql
-_time:5m | format 'uppercase foo: <uc:foo>, lowercase bar: <lc:bar>' as result
-```
+- Uppercase and lowercase strings - add `uc:` or `lc:` in front of the corresponding field name.
+  For example, the following query stores uppercase value of `foo` field and lowercase value of `bar` field in the `result` field:
+
+  ```logsql
+  _time:5m | format 'uppercase foo: <uc:foo>, lowercase bar: <lc:bar>' as result
+  ```
+
+- [URL encoding](https://en.wikipedia.org/wiki/Percent-encoding) and decoding (aka `percent encoding`) - add `urlencode:` or `urldecode:`
+  in front of the corresponding field name. For example, the following query properly encodes `user` field in the url query arg:
+
+  ```logsql
+  _time:5m | format 'url: http://foo.com/?user=<urlencode:user>'
+  ```
+
+- Hex encoding and decoding - add `hexencode:` or `hexdecode:` in front of the corresponding field name.
+  For example, the following query hex-encodes `password` field:
+
+  ```logsql
+  _time:5m | format 'hex-encoded password: <hexencode:password>'
+  ```
+
+- [Base64 encoding](https://en.wikipedia.org/wiki/Base64) and decoding - add `base64encode:` or `base64decode:` in front of the corresponding
+  field name. For example, the following query base64-encodes `password` field:
+
+  ```logsql
+  _time:5m | format 'base64-encoded password: <base64encode:password>'
+  ```
+
+- Converting of hexadecimal number to decimal number - add `hexnumdecode:` in front of the corresponding field name. For example, `format "num=<hexnumdecode:some_hex_field>"`.
 
 Numeric fields can be transformed into the following string representation at `format` pipe:
 
@@ -1894,6 +1940,8 @@ Numeric fields can be transformed into the following string representation at `f
 
 - IPv4 - by adding `ipv4:` in front of the corresponding field name containing `uint32` representation of the IPv4 address.
   For example, `format "ip=<ipv4:ip_num>"`.
+
+- Zero-padded 64-bit hex number - by adding 'hexnumencode:' in front of the corresponding field name. For example, `format "hex_num=<hexnumencode:some_field>"`.
 
 Add `keep_original_fields` to the end of `format ... as result_field` when the original non-empty value of the `result_field` must be preserved
 instead of overwriting it with the `format` results. For example, the following query adds formatted result to `foo` field only if it was missing or empty:
@@ -1981,6 +2029,7 @@ _time:1d {app="app1"} | stats by (user) count() app1_hits
 
 See also:
 
+- [`in` filter](#multi-exact-filter)
 - [`stats` pipe](#stats-pipe)
 - [conditional `stats`](https://docs.victoriametrics.com/victorialogs/logsql/#stats-with-additional-filters)
 - [`filter` pipe](#filter-pipe)
@@ -2094,6 +2143,7 @@ The following mathematical operations are supported by `math` pipe:
 - `ln(arg)` - returns [natural logarithm](https://en.wikipedia.org/wiki/Natural_logarithm) for the given `arg`
 - `max(arg1, ..., argN)` - returns the maximum value among the given `arg1`, ..., `argN`
 - `min(arg1, ..., argN)` - returns the minimum value among the given `arg1`, ..., `argN`
+- `rand()` - returns pseudo-random number in the range `[0...1)`.
 - `round(arg)` - returns rounded to integer value for the given `arg`. The `round()` accepts optional `nearest` arg, which allows rounding the number to the given `nearest` multiple.
   For example, `round(temperature, 0.1)` rounds `temperature` field to one decimal digit after the point.
 
@@ -2715,6 +2765,22 @@ See also:
 - [`uniq` pipe](#uniq-pipe)
 - [`stats` pipe](#stats-pipe)
 - [`sort` pipe](#sort-pipe)
+- [`histogram` stats function](#histogram-stats)
+
+### union pipe
+
+`q1 | union (q2)` [pipe](#pipes) returns results of `q1` followed by results of `q2`. It works similar to `UNION ALL` in SQL.
+`q1` and `q2` may contain arbitrary [LogsQL queries](#logsql-tutorial).
+For example, the following query returns logs with `error` [word](#word) for the last 5 minutes, plus logs with `panic` word for the last hour:
+
+```logsql
+_time:5m error | union (_time:1h panic)
+```
+
+See also:
+
+- [`join` pipe](#join-pipe)
+- [`in` filter](#multi-exact-filter)
 
 ### uniq pipe
 
@@ -3059,6 +3125,7 @@ LogsQL supports the following functions for [`stats` pipe](#stats-pipe):
 - [`count_empty`](#count_empty-stats) returns the number logs with empty [log fields](https://docs.victoriametrics.com/victorialogs/keyconcepts/#data-model).
 - [`count_uniq`](#count_uniq-stats) returns the number of unique non-empty values for the given [log fields](https://docs.victoriametrics.com/victorialogs/keyconcepts/#data-model).
 - [`count_uniq_hash`](#count_uniq_hash-stats) returns the number of unique hashes for non-empty values at the given [log fields](https://docs.victoriametrics.com/victorialogs/keyconcepts/#data-model).
+- [`histogram`](#histogram-stats) returns [VictoriaMetrics histogram](https://valyala.medium.com/improving-histogram-usability-for-prometheus-and-grafana-bc7e5df0e350) for the given [log field](https://docs.victoriametrics.com/victorialogs/keyconcepts/#data-model).
 - [`max`](#max-stats) returns the maximum value over the given [log fields](https://docs.victoriametrics.com/victorialogs/keyconcepts/#data-model).
 - [`median`](#median-stats) returns the [median](https://en.wikipedia.org/wiki/Median) value over the given [log fields](https://docs.victoriametrics.com/victorialogs/keyconcepts/#data-model).
 - [`min`](#min-stats) returns the minimum value over the given [log fields](https://docs.victoriametrics.com/victorialogs/keyconcepts/#data-model).
@@ -3206,6 +3273,25 @@ See also:
 - [`uniq_values`](#uniq_values-stats)
 - [`count`](#count-stats)
 
+### histogram stats
+
+`histogram(field)` [stats pipe function](#stats-pipe-functions) returns [VictoriaMetrics histogram buckets](https://docs.victoriametrics.com/victorialogs/keyconcepts/#data-model)
+for the given [`field`](https://docs.victoriametrics.com/victorialogs/keyconcepts/#data-model).
+
+For example, the following query returns histogram buckets for the `response_size` field grouped by `host` field, across logs for the last 5 minutes:
+
+```logsql
+_time:5m | stats by (host) histogram(response_size)
+```
+
+If the field contains [duration value](#duration-values), then `histogram` normalizes it to nanoseconds. For example, `1.25ms` is normalized to `1_250_000`.
+
+If the field contains [short numeric value](#short-numeric-values), then `histogram` normalizes it to numeric value without any suffixes. For example, `1KiB` is converted to `1024`.
+
+See also:
+
+- [`quantile`](#quantile-stats)
+
 ### max stats
 
 `max(field1, ..., fieldN)` [stats pipe function](#stats-pipe-functions) returns the maximum value across
@@ -3283,6 +3369,7 @@ _time:5m | stats
 
 See also:
 
+- [`histogram`](#histogram-stats)
 - [`min`](#min-stats)
 - [`max`](#max-stats)
 - [`median`](#median-stats)
